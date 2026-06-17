@@ -26,9 +26,10 @@ func main() {
 
 	addr := getenv("HTTP_ADDR", defaultAddr)
 	devicePath := getenv("PRINTER_DEVICE", defaultDevice)
+	baudRate := getenv("BAUD_RATE", "9600")
 	receiptMode := receipt.Mode(getenv("RECEIPT_MODE", string(receipt.ModeESCPOS)))
 
-	writer := printer.NewSerialWriter(devicePath, 250*time.Millisecond)
+	writer := printer.NewSerialWriter(devicePath, baudRate, 250*time.Millisecond)
 	service := receipt.NewService(receiptMode)
 	handler := api.NewHandler(service, writer)
 
@@ -41,7 +42,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("printer service listening on %s, device=%s, receipt_mode=%s", addr, devicePath, receiptMode)
+	log.Printf("printer service listening on %s, device=%s, baud_rate=%s, receipt_mode=%s", addr, devicePath, baudRate, receiptMode)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server failed: %v", err)
 	}

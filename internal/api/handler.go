@@ -28,8 +28,13 @@ func NewHandler(receipts ReceiptService, printer Printer) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("POST /print/receipt", h.printReceipt)
 	mux.HandleFunc("POST /print/test", h.printTest)
+}
+
+func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) printReceipt(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +63,7 @@ func (h *Handler) printReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "printed"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "printed", "bytes": len(data)})
 }
 
 func (h *Handler) printTest(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +77,7 @@ func (h *Handler) printTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "printed"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "printed", "bytes": len(data)})
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

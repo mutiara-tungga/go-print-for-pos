@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -14,14 +16,19 @@ var ErrUnavailable = errors.New("printer unavailable")
 
 type SerialWriter struct {
 	devicePath string
+	baudRate   string
 	retryDelay time.Duration
 	closeDelay time.Duration
 	mu         sync.Mutex
 }
 
-func NewSerialWriter(devicePath string, retryDelay time.Duration) *SerialWriter {
+func NewSerialWriter(devicePath, baudRate string, retryDelay time.Duration) *SerialWriter {
+	if baudRate == "" {
+		baudRate = "9600"
+	}
 	return &SerialWriter{
 		devicePath: devicePath,
+		baudRate:   baudRate,
 		retryDelay: retryDelay,
 		closeDelay: 150 * time.Millisecond,
 	}
@@ -54,7 +61,11 @@ func (w *SerialWriter) Write(data []byte) error {
 }
 
 func (w *SerialWriter) writeOnce(data []byte) error {
-	file, err := os.OpenFile(w.devicePath, os.O_WRONLY, 0)
+	if err := w.configureSerial(); err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(w.devicePath, os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
 		return fmt.Errorf("%w: open %s: %v", ErrUnavailable, w.devicePath, err)
 	}
@@ -66,6 +77,32 @@ func (w *SerialWriter) writeOnce(data []byte) error {
 	if w.closeDelay > 0 {
 		time.Sleep(w.closeDelay)
 	}
+	return nil
+}
+
+func (w *SerialWriter) configureSerial() error {
+	args := []string{"-F", w.devicePath}
+	if runtime.GOOS == "darwin" {
+		args = []string{"-f", w.devicePath}
+	}
+
+	args = append(args,
+		w.baudRate,
+		"raw",
+		"cs8",
+		"-cstopb",
+		"-parenb",
+		"-ixon",
+		"-ixoff",
+		"-crtscts",
+		"clocal",
+	)
+
+	cmd := exec.Command("stty", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: configure serial %s: %v: %s", ErrUnavailable, w.devicePath, err, string(output))
+	}
+
 	return nil
 }
 
@@ -93,6 +130,7 @@ func writeChunk(file *os.File, data []byte) error {
 		if err != nil {
 			return err
 		}
+		log.Printf("wrote %d bytes", n)
 		if n == 0 {
 			return errors.New("printer accepted zero bytes")
 		}
